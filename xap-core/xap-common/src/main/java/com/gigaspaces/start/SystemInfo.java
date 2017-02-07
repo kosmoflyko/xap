@@ -148,6 +148,10 @@ public class SystemInfo {
             return work;
         }
 
+        public String restResources() {
+            return work + File.separator + "RESTresources";
+        }
+
         public String deploy(){
             return deploy;
         }
