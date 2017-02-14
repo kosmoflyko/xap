@@ -20,6 +20,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,6 +58,97 @@ public class PUZipUtils {
     }
 
     private static final Random random = new Random();
+
+    public static void uploadProcessingUnit(String deployURL, String puPath, File puFile) throws Exception {
+        if (!puFile.exists()) {
+            throw new FileNotFoundException("File " + puFile.getAbsolutePath() +" doesn't exist");
+        }
+        boolean deletePUFile = false;
+        if (puFile.isDirectory() && puFile.getParent().endsWith("/templates")) {
+            logger.finest("Skip upload of " + puFile + " - template file");
+            return;
+        }
+        if (puFile.exists() && puFile.isDirectory()) {
+            // this is a directory, jar it up and prepare it for upload
+            File zipPUFile = new File(System.getProperty("java.io.tmpdir") + File.separator + puPath + ".zip");
+            if (logger.isLoggable(Level.FINE)) {
+                logger.fine("Zip directory [" + puFile.getAbsolutePath() + "] into [" + zipPUFile.getAbsolutePath() + "]");
+            }
+            PUZipUtils.zip(puFile, zipPUFile);
+            puFile = zipPUFile;
+            deletePUFile = true;
+        }
+        if (!puFile.getName().endsWith(".zip")
+                && !puFile.getName().endsWith(".jar")
+                && !puFile.getName().endsWith(".war")) {
+            throw new IllegalArgumentException("File " + puFile.getAbsolutePath() +" should be one of: zip/jar/war");
+        }
+        if (puFile.length() > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("File " + puFile.getPath() + " is too big: " + puFile.length() + " bytes");
+        }
+        byte[] buffer = new byte[4098];
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("Uploading [" + puPath + "] from [" + puFile.getPath() + "] to [" + deployURL + "]");
+        }
+        HttpURLConnection conn = (HttpURLConnection) new URL(deployURL + puFile.getName()).openConnection();
+        conn.setDoOutput(true);
+        conn.setDoInput(true);
+        conn.setAllowUserInteraction(false);
+        conn.setUseCaches(false);
+        conn.setRequestMethod("PUT");
+        conn.setRequestProperty("Extract", "true");
+        //Sets the Content-Length request property
+        //And disables buffering of file in memory (pure streaming)
+        conn.setFixedLengthStreamingMode((int) puFile.length());
+        try {
+            conn.connect();
+            OutputStream out = new BufferedOutputStream(conn.getOutputStream());
+            InputStream in = new BufferedInputStream(new FileInputStream(puFile));
+            try {
+                int byteCount = 0;
+                int bytesRead = -1;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                    byteCount += bytesRead;
+                }
+                out.flush();
+            } finally {
+                if (out != null) {
+                    out.close();
+                }
+                if (in != null) {
+                    in.close();
+                }
+            }
+
+            int responseCode = conn.getResponseCode();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            try {
+                String line;
+                StringBuffer sb = new StringBuffer();
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+
+                if (responseCode != 200 && responseCode != 201) {
+                    throw new RuntimeException("Failed to upload file, response code [" + responseCode + "], response: " + sb.toString());
+                }
+
+            } finally {
+                reader.close();
+            }
+        } finally {
+            conn.disconnect();
+
+            if (deletePUFile) {
+                puFile.delete();
+            }
+        }
+        if (logger.isLoggable(Level.FINEST)) {
+            logger.finest("Upload of [" + puPath + "] completed");
+        }
+    }
 
     public static long downloadProcessingUnit(String puName, URL url, File extractToTarget, File tempLocation) throws Exception {
         TLSUtils.enableHttpsClient();
