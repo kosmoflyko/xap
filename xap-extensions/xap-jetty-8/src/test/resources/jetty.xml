@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd">
+
+    <bean id="propertiesConfigurer"
+          class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE"/>
+        <property name="properties">
+            <props>
+                <prop key="webapps.baseDir">${XAP_HOME}/lib/platform/admin-rest/webapps</prop>
+            </props>
+        </property>
+    </bean>
+
+    <bean id="sslContextFactory" class="org.eclipse.jetty.util.ssl.SslContextFactory">
+        <property name="keyStore" value="${XAP_HOME}/keystore.ks"/>
+        <property name="keyStorePassword" value="foo"/>
+        <property name="trustStore" value="${XAP_HOME}/keystore.ks"/>
+        <property name="trustStorePassword" value="foo"/>
+    </bean>
+
+    <bean id="jetty" class="org.eclipse.jetty.server.Server" init-method="start">
+        <property name="stopAtShutdown" value="true"/>
+        <property name="connectors">
+            <list>
+                <bean class="org.eclipse.jetty.server.nio.SelectChannelConnector">
+                    <property name="host" value="${com.gs.manager.api.host}"/>
+                    <property name="port" value="${com.gs.manager.api.port}"/>
+                </bean>
+                <bean class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
+                    <constructor-arg ref="sslContextFactory"/>
+                    <property name="port" value="${com.gs.manager.api.https.port}"/>
+                    <property name="host" value="${com.gs.manager.api.host}"/>
+                    <property name="maxIdleTime" value="30000"/>
+                </bean>
+            </list>
+        </property>
+
+        <property name="handler">
+            <bean class="org.eclipse.jetty.server.handler.ContextHandlerCollection">
+                <property name="handlers">
+                    <list>
+                        <bean class="org.eclipse.jetty.webapp.WebAppContext">
+                            <property name="contextPath" value="/v1"/>
+                            <property name="war" value="${webapps.baseDir}/v1.war"/>
+                            <property name="throwUnavailableOnStartupException" value="true"/>
+                        </bean>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+</beans>
