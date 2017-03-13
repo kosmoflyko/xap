@@ -93,6 +93,8 @@ import com.gigaspaces.internal.server.storage.TemplateHolder;
 import com.gigaspaces.internal.server.storage.TemplateHolderFactory;
 import com.gigaspaces.internal.server.storage.UserTypeEntryData;
 import com.gigaspaces.internal.sync.SynchronizationStorageAdapter;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridSAException;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridTransactionException;
 import com.gigaspaces.internal.transport.EntryPacket;
 import com.gigaspaces.internal.transport.EntryPacketFactory;
 import com.gigaspaces.internal.transport.IEntryPacket;
@@ -3239,6 +3241,11 @@ public class SpaceEngine implements ISpaceModeListener {
                     st,
                     supportsTwoPhaseReplication,
                     xtnEntry);
+
+            if (SyncHybridSAException.getSyncHybridException(ex) != null) {
+                throw new SyncHybridTransactionException("Failed to prepare transaction in sync hybrid mode", ex);
+            }
+
             return TransactionConstants.ABORTED;
         } finally {
             if(isTxnLocked && xtnEntryLocked != null){

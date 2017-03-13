@@ -59,6 +59,11 @@ public class MirrorBulkDataItem implements InternalBulkItem {
     }
 
     @Override
+    public IEntryPacket toEntryPacket() {
+        return _dataPacket;
+    }
+
+    @Override
     public String toString() {
         String operation = null;
 

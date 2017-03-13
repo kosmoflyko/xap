@@ -75,6 +75,8 @@ import com.gigaspaces.internal.server.storage.ReplicationEntryHolder;
 import com.gigaspaces.internal.server.storage.ShadowEntryHolder;
 import com.gigaspaces.internal.server.storage.TemplateHolder;
 import com.gigaspaces.internal.server.storage.TemplateHolderFactory;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridSAException;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridStorageAdapter;
 import com.gigaspaces.internal.transport.ITemplatePacket;
 import com.gigaspaces.internal.transport.TemplatePacket;
 import com.gigaspaces.internal.utils.StringUtils;
@@ -370,7 +372,7 @@ public class CacheManager extends AbstractCacheManager
         String oh = System.getProperty("com.gs.OffHeapData");
         if (!_offHeapForQa)
             _offHeapForQa = (oh == null || _engine.isLocalCache()) ? false : Boolean.parseBoolean(oh);
-        if (_offHeapForQa) {
+        if (_offHeapForQa && !isSyncHybrid()) {
             persistentBlobStore = true;
         }
         if (_offHeapForQa && isEvictableCachePolicy()) {
@@ -381,14 +383,14 @@ public class CacheManager extends AbstractCacheManager
         }
         if (_offHeapForQa)
             setCachePolicy(CACHE_POLICY_BLOB_STORE);
-        if (_offHeapForQa && !isMemorySA && !sa.isReadOnly()) {
+        if (_offHeapForQa && !isMemorySA && !sa.isReadOnly() && !isSyncHybrid()) {
             _offHeapForQa = false;
             setCachePolicy(CACHE_POLICY_ALL_IN_CACHE);
         }
 //------------------ TEMP FOR QA
 
         if (isOffHeapCachePolicy()) {
-            _useBlobStoreBulks = Boolean.parseBoolean(System.getProperty(FULL_CACHE_MANAGER_USE_BLOBSTORE_BULKS_PROP, "true"));
+            _useBlobStoreBulks = Boolean.parseBoolean(System.getProperty(FULL_CACHE_MANAGER_USE_BLOBSTORE_BULKS_PROP, isSyncHybrid() ? "false" : "true"));
             _logger.info("useBlobStoreBulks=" + _useBlobStoreBulks);
             _optimizedBlobStoreClear = Boolean.parseBoolean(System.getProperty(CACHE_MANAGER_USE_BLOBSTORE_CLEAR_OPTIMIZATION_PROP, "true"));
 
@@ -419,8 +421,14 @@ public class CacheManager extends AbstractCacheManager
         _persistentBlobStore = persistentBlobStore;
 
         if (isOffHeapCachePolicy()) {
-            IStorageAdapter curSa = (isMemorySA) ? new OffHeapStorageAdapter(_engine, _persistentBlobStore)
-                    : new OffHeapStorageAdapter(_engine, _persistentBlobStore, sa /*recoverysa*/);
+            IStorageAdapter curSa;
+            if(isSyncHybrid()){
+                curSa =new SyncHybridStorageAdapter(this, sa, new OffHeapStorageAdapter(_engine, _persistentBlobStore));
+            }
+            else {
+                curSa = (isMemorySA) ? new OffHeapStorageAdapter(_engine, _persistentBlobStore)
+                        : new OffHeapStorageAdapter(_engine, _persistentBlobStore, sa /*recoverysa*/);
+            }
             _storageAdapter = curSa;
             _isMemorySA = false;
             _isCacheExternalDB = false;
@@ -482,6 +490,10 @@ public class CacheManager extends AbstractCacheManager
         Object userFunctions = customProperties.get(Constants.SqlFunction.USER_SQL_FUNCTION);
         sqlFunctions = new SQLFunctions((Map<String, SqlFunction>) userFunctions);
         queryExtensionManagers = initQueryExtensionManagers(customProperties);
+    }
+
+    public boolean isSyncHybrid() {
+        return _engine.getConfigReader().getBooleanSpaceProperty(Constants.CacheManager.BLOBSTORE_ENABLE_UNSAFE_ENDPOINT_PROP, "false");
     }
 
     private Map<String, QueryExtensionIndexManagerWrapper> initQueryExtensionManagers(Properties customProperties) {
@@ -1440,9 +1452,11 @@ public class CacheManager extends AbstractCacheManager
                 //If should be sent to cluster
                 if (shouldReplicate && !context.isDelayedReplicationForbulkOpUsed())
                     handleInsertEntryReplication(context, entryHolder);
-            }//try
+            }
             catch (SAException ex) {
-                removeEntryFromCache(entryHolder);
+                if (!entryHolder.isDeleted()) {
+                    removeEntryFromCache(entryHolder);
+                }
                 context.resetRecentFifoObject();
 
                 throw ex;

@@ -133,6 +133,11 @@ public class MirrorChangeBulkDataItem
     }
 
     @Override
+    public IEntryPacket toEntryPacket() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public Collection<ChangeOperation> getOperations() {
         return _mutators;
     }

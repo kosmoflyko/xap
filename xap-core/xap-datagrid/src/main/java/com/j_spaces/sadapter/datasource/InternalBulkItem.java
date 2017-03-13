@@ -21,5 +21,5 @@ import com.gigaspaces.internal.transport.IEntryPacket;
 
 public interface InternalBulkItem extends BulkItem {
     void setConverter(IDataConverter<IEntryPacket> converter);
-
+    IEntryPacket toEntryPacket();
 }

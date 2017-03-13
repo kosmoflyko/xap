@@ -37,13 +37,11 @@ import com.gigaspaces.internal.server.storage.EntryDataType;
 import com.gigaspaces.internal.server.storage.EntryHolderFactory;
 import com.gigaspaces.internal.server.storage.IEntryHolder;
 import com.gigaspaces.internal.server.storage.ITemplateHolder;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridOperationDetails;
 import com.gigaspaces.internal.transport.IEntryPacket;
 import com.gigaspaces.metadata.SpaceTypeDescriptor;
 import com.gigaspaces.metadata.index.SpaceIndex;
-import com.gigaspaces.sync.AddIndexDataImpl;
-import com.gigaspaces.sync.DataSyncOperation;
-import com.gigaspaces.sync.IntroduceTypeDataImpl;
-import com.gigaspaces.sync.SpaceSynchronizationEndpoint;
+import com.gigaspaces.sync.*;
 import com.j_spaces.core.Constants;
 import com.j_spaces.core.JSpaceAttributes;
 import com.j_spaces.core.SpaceOperations;
@@ -53,15 +51,7 @@ import com.j_spaces.core.sadapter.IStorageAdapter;
 import com.j_spaces.core.sadapter.SAException;
 import com.j_spaces.kernel.ClassLoaderHelper;
 import com.j_spaces.kernel.ResourceLoader;
-import com.j_spaces.sadapter.datasource.BulkDataItem;
-import com.j_spaces.sadapter.datasource.DataAdaptorIterator;
-import com.j_spaces.sadapter.datasource.DataStorage;
-import com.j_spaces.sadapter.datasource.EntryAdapter;
-import com.j_spaces.sadapter.datasource.EntryAdapterIterator;
-import com.j_spaces.sadapter.datasource.EntryPacketDataConverter;
-import com.j_spaces.sadapter.datasource.IDataConverter;
-import com.j_spaces.sadapter.datasource.PartialUpdateBulkDataItem;
-import com.j_spaces.sadapter.datasource.SQLQueryBuilder;
+import com.j_spaces.sadapter.datasource.*;
 
 import net.jini.core.transaction.server.ServerTransaction;
 
@@ -256,6 +246,9 @@ public class SynchronizationStorageAdapter implements IStorageAdapter {
                 return;
             final ITypeDesc typeDescriptor = getType(entryHolder.getClassName());
             final DataSyncOperation operation = new BulkDataItem(entryHolder, typeDescriptor, BulkItem.WRITE, _converter);
+            if (_engine.getCacheManager().isSyncHybrid()) {
+                injectSyncHybridOperationsDetails(context, new DataSyncOperation[]{operation});
+            }
             _syncEndpoint.onOperationsBatchSynchronization(new OperationsDataBatchImpl(operation, _spaceName));
         } catch (Throwable t) {
             if (_logger.isLoggable(Level.FINER))
@@ -289,6 +282,9 @@ public class SynchronizationStorageAdapter implements IStorageAdapter {
         } else {
             operation = new BulkDataItem(updatedEntry, typeDescriptor, BulkItem.UPDATE, _converter);
         }
+        if (_engine.getCacheManager().isSyncHybrid()) {
+            injectSyncHybridOperationsDetails(context, new DataSyncOperation[]{operation});
+        }
         _syncEndpoint.onOperationsBatchSynchronization(new OperationsDataBatchImpl(operation, _spaceName));
     }
 
@@ -301,6 +297,9 @@ public class SynchronizationStorageAdapter implements IStorageAdapter {
 
             final ITypeDesc typeDescriptor = getType(entryHolder.getClassName());
             final DataSyncOperation operation = new BulkDataItem(entryHolder, typeDescriptor, BulkItem.REMOVE, _converter);
+            if (_engine.getCacheManager().isSyncHybrid()) {
+                injectSyncHybridOperationsDetails(context, new DataSyncOperation[]{operation});
+            }
             _syncEndpoint.onOperationsBatchSynchronization(new OperationsDataBatchImpl(operation, _spaceName));
         } catch (Throwable t) {
             if (_logger.isLoggable(Level.FINER))
@@ -358,6 +357,9 @@ public class SynchronizationStorageAdapter implements IStorageAdapter {
 
             }
             if (!operations.isEmpty()) {
+                if (_engine.getCacheManager().isSyncHybrid()) {
+                    injectSyncHybridOperationsDetails(context, operations.toArray(new DataSyncOperation[operations.size()]));
+                }
                 _syncEndpoint.onTransactionSynchronization(new TransactionDataImpl(operations.toArray(new DataSyncOperation[operations.size()]),
                         xtn.getMetaData(),
                         _spaceName));
@@ -627,5 +629,15 @@ public class SynchronizationStorageAdapter implements IStorageAdapter {
     @Override
     public Class<?> getDataClass() {
         return _dataClass;
+    }
+
+    private void injectSyncHybridOperationsDetails(Context ctx, DataSyncOperation[] operations) {
+        SyncHybridOperationDetails[] syncHybridOperationsDetails = new SyncHybridOperationDetails[operations.length];
+        for (int i = 0; i < operations.length; i++) {
+            DataSyncOperationType dataSyncOperationType= operations[i].getDataSyncOperationType();
+            IEntryPacket entryPacket = ((InternalBulkItem) operations[i]).toEntryPacket();
+            syncHybridOperationsDetails[i] = new SyncHybridOperationDetails(_spaceName, dataSyncOperationType, entryPacket);
+        }
+        ctx.setSyncHybridOperationDetails(syncHybridOperationsDetails);
     }
 }

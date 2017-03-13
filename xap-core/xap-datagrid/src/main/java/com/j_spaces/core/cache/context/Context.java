@@ -37,6 +37,7 @@ import com.gigaspaces.internal.server.storage.IEntryData;
 import com.gigaspaces.internal.server.storage.IEntryHolder;
 import com.gigaspaces.internal.server.storage.ITemplateHolder;
 import com.gigaspaces.internal.server.storage.ITransactionalEntryData;
+import com.gigaspaces.internal.sync.hybrid.SyncHybridOperationDetails;
 import com.gigaspaces.internal.transport.IEntryPacket;
 import com.gigaspaces.internal.transport.TemplatePacketFactory;
 import com.gigaspaces.lrmi.nio.IResponseContext;
@@ -235,6 +236,8 @@ public class Context {
     private Collection<SpaceEntryMutator> _mutators; //for change
     private SpaceEngine.EntryRemoveReasonCodes _removeReason; //remove
 
+    //the following are used in hybrid sync storageAdapter
+    private SyncHybridOperationDetails[] _syncHybridOperationsDetails;
 
     private String _owningThreadName;
 
@@ -465,7 +468,7 @@ public class Context {
         _removeReason = null; //remove
         _delayedReplicationForbulkOpUsed = false;
         _explainPlanContext = null;
-
+        _syncHybridOperationsDetails = null;
         _owningThreadName = null;
     }
 
@@ -1184,6 +1187,14 @@ public class Context {
             }
 
         }//if (!skipAnswerTable)
+    }
+
+    public void setSyncHybridOperationDetails(SyncHybridOperationDetails[] syncHybridOperationsDetails) {
+        _syncHybridOperationsDetails = syncHybridOperationsDetails;
+    }
+
+    public SyncHybridOperationDetails[] getSyncHybridOperationDetails() {
+        return _syncHybridOperationsDetails;
     }
 
 }

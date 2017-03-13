@@ -46,4 +46,9 @@ public class UnknownTransactionException extends TransactionException {
     public UnknownTransactionException() {
         super();
     }
+
+    /** Constructs an instance with detail message and inner throwable. */
+    public UnknownTransactionException(String desc, Throwable e) {
+        super(desc, e);
+    }
 }

@@ -262,6 +262,8 @@ public abstract class CollectionUtils {
             return (List<T>) ((ArrayList<T>) list).clone();
         if (list instanceof LinkedList)
             return (List<T>) ((LinkedList<T>) list).clone();
+        if (list.getClass().getName().equals("java.util.Arrays$ArrayList"))
+            return new ArrayList<T>(list);
 
         SpaceTypeInfo typeInfo = SpaceTypeInfoRepository.getTypeInfo(list.getClass());
         List<T> result = (List<T>) typeInfo.createInstance();

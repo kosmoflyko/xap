@@ -35,12 +35,7 @@ import com.sun.jini.thread.WakeupManager;
 
 import net.jini.core.lease.LeaseDeniedException;
 import net.jini.core.lease.UnknownLeaseException;
-import net.jini.core.transaction.CannotAbortException;
-import net.jini.core.transaction.CannotCommitException;
-import net.jini.core.transaction.CannotJoinException;
-import net.jini.core.transaction.TimeoutExpiredException;
-import net.jini.core.transaction.TransactionException;
-import net.jini.core.transaction.UnknownTransactionException;
+import net.jini.core.transaction.*;
 import net.jini.core.transaction.server.CrashCountException;
 import net.jini.core.transaction.server.ServerTransaction;
 import net.jini.core.transaction.server.TransactionConstants;
@@ -1030,11 +1025,7 @@ class TxnManagerTransaction
                                     settler.noteUnsettledTxn(str.id);
 
                                 //derive the execption in commit if any
-                                for (ParticipantHandle ph : phs) {
-                                    if (ph.getCommitException() != null) {
-                                        throw new CannotCommitException("some participants failed in commit after prepare [ID=" + +getTransaction().id + "]: - risk of partial transaction reason=" + ph.getCommitException(), ph.getCommitException());
-                                    }
-                                }
+                                throwCannotCommitExceptionIfNeeded(phs);
 
 
                                 throw new TimeoutExpiredException(
@@ -1044,10 +1035,7 @@ class TxnManagerTransaction
                                 committed = true;
                             }
                             //derive the execption in commit if any
-                            for (ParticipantHandle ph : phs) {
-                                if (ph.getCommitException() != null)
-                                    throw new CannotCommitException("some participants failed in commit after prepare [ID=" + getTransaction().id + "]: risk of partial transaction reason=" + ph.getCommitException(), ph.getCommitException());
-                            }
+                            throwCannotCommitExceptionIfNeeded(phs);
 
                         }
                     } catch (ResultNotReadyException rnre) {
@@ -1094,6 +1082,19 @@ class TxnManagerTransaction
         return COMMITTED;
     }
 
+    private void throwCannotCommitExceptionIfNeeded(ParticipantHandle[] phs) throws CannotCommitException {
+        Map<Integer, Exception> participantsExceptions = new HashMap<Integer, Exception>();
+        for (ParticipantHandle ph : phs)
+        {
+            if (ph.getCommitException() != null)
+            {
+                participantsExceptions.put(ph.getPartionId(), ph.getCommitException());
+            }
+        }
+        if (!participantsExceptions.isEmpty()) {
+            throw new CannotCommitDistributedException("some participants failed in commit after prepare [ID=" + getTransaction().id +"]: - risk of partial transaction", participantsExceptions);
+        }
+    }
 
     private Throwable getCommitExceptionCause(ParticipantHandle[] phs) {
         for (ParticipantHandle participantHandle : phs) {
