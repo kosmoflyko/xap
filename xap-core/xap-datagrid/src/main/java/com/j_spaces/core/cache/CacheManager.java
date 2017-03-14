@@ -415,7 +415,7 @@ public class CacheManager extends AbstractCacheManager
         if (isOffHeapCachePolicy() && _engine.isLocalCache())
             throw new RuntimeException("blob-store cache policy not supported in local-cache");
 
-        if (isOffHeapCachePolicy() && !isMemorySA && !sa.isReadOnly())
+        if (isOffHeapCachePolicy() && !isMemorySA && !sa.isReadOnly() && !isSyncHybrid())
             throw new RuntimeException("blob-store cache policy not supported with direct EDS");
 
         _persistentBlobStore = persistentBlobStore;
