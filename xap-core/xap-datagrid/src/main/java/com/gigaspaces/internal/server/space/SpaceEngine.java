@@ -3242,7 +3242,7 @@ public class SpaceEngine implements ISpaceModeListener {
                     supportsTwoPhaseReplication,
                     xtnEntry);
 
-            if (SyncHybridSAException.getSyncHybridException(ex) != null) {
+            if (ex instanceof SyncHybridSAException || SyncHybridSAException.getSyncHybridException(ex) != null) {
                 throw new SyncHybridTransactionException("Failed to prepare transaction in sync hybrid mode", ex);
             }
 
